@@ -33,7 +33,7 @@
 
 4. **Install `gnfnt` Globally**:
    ```bash
-   sudo make install
+   sudo make -f MakeFile install
    ```
 
 5. **Run `gnfnt`**:

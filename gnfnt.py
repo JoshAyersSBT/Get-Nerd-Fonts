@@ -14,6 +14,7 @@ from pathlib import Path
 from pip._vendor.rich.progress import Progress
 
 def get_all_nerd_fonts():
+    """Fetch the list of all available Nerd Fonts from GitHub releases."""
     github_api_url = "https://api.github.com/repos/ryanoasis/nerd-fonts/releases/latest"
     response = requests.get(github_api_url)
     if response.status_code == 200:
@@ -24,59 +25,82 @@ def get_all_nerd_fonts():
         print("Error: Unable to fetch font list from GitHub.")
         sys.exit(1)
 
+def get_fonts_dir():
+    """Determine the system's font directory."""
+    system = platform.system()
+    if system == "Windows":
+        return Path.home() / "AppData/Local/Microsoft/Windows/Fonts"
+    elif system == "Darwin":  # macOS
+        return Path.home() / "Library/Fonts"
+    else:  # Linux and UNIX-like systems
+        return Path.home() / ".local/share/fonts/NerdFonts"
+
 def download_and_install_font(font_name):
+    """Download and install a specific Nerd Font."""
     base_url = "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/"
     font_zip = f"{font_name}.zip"
     download_url = f"{base_url}{font_zip}"
-    fonts_dir = Path.home() / ".local/share/fonts/NerdFonts"
+    fonts_dir = get_fonts_dir()
     temp_dir = Path.home() / ".gnfnt_temp"
-    
+
     fonts_dir.mkdir(parents=True, exist_ok=True)
     temp_dir.mkdir(parents=True, exist_ok=True)
-    
+
     zip_path = temp_dir / font_zip
-    
+
     print(f"Downloading {font_name} from {download_url}...")
+
     response = requests.get(download_url, stream=True)
+    total_size = int(response.headers.get("content-length", 0))
+
     if response.status_code == 200:
-        bar = Progress()
-        task_id = bar.add_task(description="Downloading Files ...", total=None)
-        bar.start()
-        
-        with open(zip_path, "wb") as file:
-            for chunk in response.iter_content(chunk_size=8192):
-                if chunk:
-                    file.write(chunk)
-                    bar.advance(task_id)
-                time.sleep(0.1)
-        
-        bar.stop()
+        with Progress(
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            DownloadColumn(),
+        ) as progress:
+            task_id = progress.add_task("[cyan]Downloading...", total=total_size)
+
+            with open(zip_path, "wb") as file:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        file.write(chunk)
+                        progress.update(task_id, advance=len(chunk))
+
         print(f"Downloaded {font_name}. Extracting...")
-        
+
         with zipfile.ZipFile(zip_path, "r") as zip_ref:
             zip_ref.extractall(temp_dir)
-        
+
         installed = False
         for font_file in temp_dir.iterdir():
             if font_file.suffix in [".ttf", ".otf"]:
                 shutil.move(str(font_file), str(fonts_dir))
                 print(f"Installed {font_file.name}")
                 installed = True
-        
+
         if not installed:
             print(f"Error: No valid font files found in {font_name}. The font may not exist.")
-        
+
         zip_path.unlink()
         print(f"{font_name} installation complete.")
     else:
         print(f"Error: Failed to download {font_name}. Check the font name and try again.")
-    
+
     shutil.rmtree(temp_dir, ignore_errors=True)
 
 def refresh_font_cache():
+    """Refresh the system font cache after installation."""
     print("Refreshing font cache...")
-    os.system("fc-cache -fv")
+    system = platform.system()
+    if system == "Windows":
+        print("On Windows, fonts should be available after restarting the application.")
+    elif system == "Darwin":
+        os.system("sudo atsutil databases -remove")
+    else:
+        os.system("fc-cache -fv")
     print("Font cache updated.")
+
 
 def print_help():
     print("""
