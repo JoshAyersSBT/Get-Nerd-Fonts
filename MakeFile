@@ -1,0 +1,15 @@
+INSTALL_DIR=/usr/local/bin
+SCRIPT_NAME=gnfnt
+
+install:
+	@echo "Installing $(SCRIPT_NAME)..."
+	@chmod +x $(SCRIPT_NAME).py
+	@sudo cp $(SCRIPT_NAME).py $(INSTALL_DIR)/$(SCRIPT_NAME)
+	@sudo chmod +x $(INSTALL_DIR)/$(SCRIPT_NAME)
+	@echo "Installation complete. You can now run '$(SCRIPT_NAME)' from anywhere."
+uninstall:
+	@echo "Uninstalling $(SCRIPT_NAME)..."
+	@sudo rm -f $(INSTALL_DIR)/$(SCRIPT_NAME)
+	@echo "Uninstallation complete."
+
+.PHONY: install uninstall
