@@ -1,7 +1,9 @@
 # gnfnt - Get Nerd Fonts Installer
 
 `gnfnt` is a simple Python-based command-line tool to automate the installation of Nerd Fonts on Linux, macOS, and Windows. It fetches the latest fonts directly from the Nerd Fonts GitHub repository and installs them on your system.
-
+### Author: Joshua Ayers
+### Licence: MIT
+### Repo: https://github.com/JoshAyersSBT/nerdFontsInstaller
 ## Features
 - Install one or more Nerd Fonts by specifying their names.
 - Install **all** Nerd Fonts using the `*` argument.
