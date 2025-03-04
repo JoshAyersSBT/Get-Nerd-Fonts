@@ -8,6 +8,9 @@ from pathlib import Path
 from pip._vendor.rich.progress import Progress, BarColumn, DownloadColumn, TextColumn
 import platform
 
+FONT_DIR = Path.home() / ".gnfnt"
+FONT_DIR.mkdir(parents=True, exist_ok=True)  # Ensure ~/.gnfnt/ exists
+
 FONT_REPO_FILE = Path.home() / ".gnfnt/fontRepos.json"
 
 def load_repositories():
@@ -125,8 +128,10 @@ def list_available_fonts():
             print(f"  ⬇️  {font}")  # Mark available fonts with a download icon
 
 
-def download_and_install_font(font_name):
-    """Download and install a specific Nerd Font."""
+import sys
+
+def download_and_install_font(font_name, index, total):
+    """Download and install a specific Nerd Font with a live progress bar."""
     if is_font_installed(font_name):
         print(f"✅ {font_name} is already installed. Skipping download.")
         return
@@ -141,21 +146,28 @@ def download_and_install_font(font_name):
     temp_dir.mkdir(parents=True, exist_ok=True)
     zip_path = temp_dir / font_zip
 
-    print(f"⬇️ Downloading {font_name} from {download_url}...")
-
     response = requests.get(download_url, stream=True)
     total_size = int(response.headers.get("content-length", 0))
 
     if response.status_code == 200:
-        with Progress(TextColumn("[progress.description]{task.description}"), BarColumn(), DownloadColumn()) as progress:
+        with Progress(
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            DownloadColumn(),
+        ) as progress:
             task_id = progress.add_task("[cyan]Downloading...", total=total_size)
+
             with open(zip_path, "wb") as file:
                 for chunk in response.iter_content(chunk_size=8192):
                     if chunk:
                         file.write(chunk)
                         progress.update(task_id, advance=len(chunk))
 
-        print(f"📦 Extracting {font_name}...")
+        # ✅ Clear previous two lines and update live status
+        sys.stdout.write("\033[F\033[K" * 2)  # Moves cursor up 2 lines and clears them
+        print(f"File: {font_name} ({index}/{total})")
+        print("Installing...")
+
         with zipfile.ZipFile(zip_path, "r") as zip_ref:
             zip_ref.extractall(temp_dir)
 
@@ -167,84 +179,22 @@ def download_and_install_font(font_name):
                     print(f"⚠️ {font_file.name} already exists. Skipping installation.")
                 else:
                     shutil.move(str(font_file), str(destination))
-                    print(f"✅ Installed {font_file.name}")
                     installed = True
 
         zip_path.unlink()
         shutil.rmtree(temp_dir, ignore_errors=True)
-        print(f"🎉 {font_name} installation complete.")
+
+        sys.stdout.write("\033[F\033[K")  # Clear previous line
+        print(f"✅ Installed: {font_name} ({index}/{total})")
+
     else:
         print(f"❌ Error: Failed to download {font_name}. Check the font name and try again.")
-
-def refresh_font_cache():
-    """Refresh the system font cache after installation."""
-    print("🔄 Refreshing font cache...")
-    if platform.system() == "Windows":
-        print("ℹ️ On Windows, fonts should be available after restarting the application.")
-    elif platform.system() == "Darwin":
-        os.system("sudo atsutil databases -remove")
-    else:
-        os.system("fc-cache -fv")
-    print("✅ Font cache updated.")
-
-def install_font_file_or_zip(file_paths):
-    """Install fonts from individual .ttf/.otf files or a .zip archive."""
-    fonts_dir = get_fonts_dir()
-    fonts_dir.mkdir(parents=True, exist_ok=True)
-
-    for file_path in file_paths:
-        file_path = Path(file_path)
-        
-        if not file_path.exists():
-            print(f"❌ Error: The file '{file_path}' does not exist.")
-            continue
-
-        if file_path.suffix.lower() in [".ttf", ".otf"]:
-            # ✅ Install individual font files
-            destination = fonts_dir / file_path.name
-            if destination.exists():
-                print(f"⚠️ {file_path.name} is already installed. Skipping.")
-            else:
-                shutil.copy(str(file_path), str(destination))
-                print(f"✅ Installed {file_path.name}")
-
-        elif file_path.suffix.lower() == ".zip":
-            # ✅ Extract and install fonts from a ZIP archive
-            temp_dir = Path.home() / ".gnfnt_temp"
-            temp_dir.mkdir(parents=True, exist_ok=True)
-
-            try:
-                with zipfile.ZipFile(file_path, "r") as zip_ref:
-                    zip_ref.extractall(temp_dir)
-
-                installed = False
-                for font_file in temp_dir.iterdir():
-                    if font_file.suffix in [".ttf", ".otf"]:
-                        destination = fonts_dir / font_file.name
-                        if destination.exists():
-                            print(f"⚠️ {font_file.name} is already installed. Skipping.")
-                        else:
-                            shutil.move(str(font_file), str(destination))
-                            print(f"✅ Installed {font_file.name}")
-                            installed = True
-
-                if not installed:
-                    print("❌ No valid font files found in the ZIP archive.")
-
-            except zipfile.BadZipFile:
-                print("❌ Error: Invalid ZIP file.")
-
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-        else:
-            print(f"⚠️ Unsupported file type: {file_path.name}. Skipping.")
-
-    refresh_font_cache()
+    #refresh_font_cache()
 
 
 def print_help():
     """Display help message."""
-    print("""
+    print(r"""
           _____                    _____                _____                                                            
          /\    \                  /\    \              /\    \                                                           
         /::\    \                /::\    \            /::\    \                                                          
@@ -328,6 +278,72 @@ Options:
   *                Install all Nerd Fonts (Warning: Large storage required)
 """)
 
+def refresh_font_cache():
+    """Refresh the system font cache after installation."""
+    print("Refreshing font cache...")
+    system = platform.system()
+    if system == "Windows":
+        print("On Windows, fonts should be available after restarting the application.")
+    elif system == "Darwin":
+        os.system("sudo atsutil databases -remove")
+    else:
+        os.system("fc-cache -fv")
+    print("Font cache updated.")
+
+def install_font_file_or_zip(file_paths):
+    """Install fonts from individual .ttf/.otf files or a .zip archive."""
+    fonts_dir = get_fonts_dir()
+    fonts_dir.mkdir(parents=True, exist_ok=True)
+
+    for file_path in file_paths:
+        file_path = Path(file_path)
+        
+        if not file_path.exists():
+            print(f"❌ Error: The file '{file_path}' does not exist.")
+            continue
+
+        if file_path.suffix.lower() in [".ttf", ".otf"]:
+            # ✅ Install individual font files
+            destination = fonts_dir / file_path.name
+            if destination.exists():
+                print(f"⚠️ {file_path.name} is already installed. Skipping.")
+            else:
+                shutil.copy(str(file_path), str(destination))
+                print(f"✅ Installed {file_path.name}")
+
+        elif file_path.suffix.lower() == ".zip":
+            # ✅ Extract and install fonts from a ZIP archive
+            temp_dir = Path.home() / ".gnfnt_temp"
+            temp_dir.mkdir(parents=True, exist_ok=True)
+
+            try:
+                with zipfile.ZipFile(file_path, "r") as zip_ref:
+                    zip_ref.extractall(temp_dir)
+
+                installed = False
+                for font_file in temp_dir.iterdir():
+                    if font_file.suffix in [".ttf", ".otf"]:
+                        destination = fonts_dir / font_file.name
+                        if destination.exists():
+                            print(f"⚠️ {font_file.name} is already installed. Skipping.")
+                        else:
+                            shutil.move(str(font_file), str(destination))
+                            print(f"✅ Installed {font_file.name}")
+                            installed = True
+
+                if not installed:
+                    print("❌ No valid font files found in the ZIP archive.")
+
+            except zipfile.BadZipFile:
+                print("❌ Error: Invalid ZIP file.")
+
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+        else:
+            print(f"⚠️ Unsupported file type: {file_path.name}. Skipping.")
+
+    refresh_font_cache()
+
 def main():
     """Main function to handle user input and execute font installations."""
     if len(sys.argv) < 2:
@@ -341,7 +357,7 @@ def main():
         sys.exit(0)
 
     if arg in ["-v", "--version"]:
-        print("gnfnt version 1.5.0")
+        print("gnfnt version 1.6.0")
         sys.exit(0)
 
     if arg in ["-l", "--list"]:
@@ -378,10 +394,11 @@ def main():
         print("✅ All specified fonts are already installed. No download needed.")
         sys.exit(0)
 
-    for font in fonts:
-        download_and_install_font(font)
+    total_fonts = len(fonts)
+    for index, font in enumerate(fonts, start=1):
+        download_and_install_font(font, index, total_fonts)
 
-    refresh_font_cache()
+    #refresh_font_cache()
     print("🎉 All fonts installed successfully.")
 
 
